@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>银河奥特曼 · 拯救维克特利</title>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Microsoft YaHei", sans-serif;
+    min-height: 100vh; overflow: hidden; color: #fff; background: #000;
+  }
+  /* ===== 开场动画层 ===== */
+  #introOverlay {
+    position: fixed; inset: 0; z-index: 100; background: #000;
+    transition: opacity 1s ease;
+  }
+  #introOverlay img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100vh;
+    object-fit: contain;
+    padding: 5vh 5vw;
+    opacity: 0;
+    transition: opacity 1s ease;
+    margin: auto;
+  }
+  #introOverlay img.active { opacity: 1; }
+
+  /* ===== 失败全屏字幕层 ===== */
+  #deathSubtitle {
+    position: fixed; inset: 0; z-index: 200; background: #000;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 1.5s ease;
+  }
+  #deathSubtitle.show { opacity: 1; pointer-events: auto; }
+  #deathSubtitle span {
+    font-size: clamp(28px, 5vw, 64px); 
+    font-weight: 800; color: #ff4444; letter-spacing: 6px;
+    text-shadow: 0 0 30px rgba(255, 0, 0, 0.8), 0 0 60px rgba(255, 0, 0, 0.4);
+    animation: pulseText 2s infinite alternate;
+  }
+  @keyframes pulseText { from { transform: scale(1); opacity: 0.8; } to { transform: scale(1.05); opacity: 1; } }
+
+  /* ===== 失败战败图片层 ===== */
+  #defeatOverlay {
+    position: fixed; inset: 0; z-index: 150; background: #000;
+    display: none; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 1.5s ease;
+  }
+  #defeatOverlay.show { display: flex; opacity: 1; }
+  #defeatOverlay img {
+    width: 100%; height: 100%; object-fit: contain;
+  }
+
+  /* ===== 结局动画层 ===== */
+  #endingOverlay {
+    position: fixed; inset: 0; z-index: 100; background: #000;
+    display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  }
+  #endingImg {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; opacity: 1; transition: opacity 1.5s ease;
+  }
+  #thanksText {
+    position: relative; z-index: 2; font-size: 42px; font-weight: 800;
+    color: #fff; letter-spacing: 4px; opacity: 0;
+    transition: opacity 1.5s ease; text-shadow: 0 0 20px #50b4ff;
+  }
+
+  /* ===== 匿名评价组件 ===== */
+  #reviewBox {
+    position: relative; z-index: 10;
+    background: rgba(10, 20, 45, 0.9);
+    border: 1px solid rgba(80,180,255,0.5);
+    border-radius: 16px; padding: 20px; width: min(400px, 90vw);
+    display: none; flex-direction: column; align-items: center; gap: 12px;
+    box-shadow: 0 0 30px rgba(80,180,255,0.3); margin-bottom: 20px;
+  }
+  #reviewBox h3 { color: #50b4ff; font-size: 18px; }
+  .stars { display: flex; gap: 8px; font-size: 32px; cursor: pointer; }
+  .star { color: #555; transition: color 0.2s; }
+  .star.active { color: #ffdd00; text-shadow: 0 0 15px #ffdd00; }
+  #reviewText {
+    width: 100%; height: 80px; background: rgba(0,0,0,0.5);
+    border: 1px solid #3a5a90; border-radius: 8px; color: #fff;
+    padding: 10px; font-family: inherit; resize: none; outline: none;
+  }
+  #reviewText:focus { border-color: #50b4ff; }
+  .submit-review {
+    background: linear-gradient(90deg, #50b4ff, #a78bfa); color: #041024;
+    border: none; border-radius: 8px; padding: 10px 30px;
+    font-weight: bold; cursor: pointer; transition: transform 0.2s;
+  }
+  .submit-review:hover { transform: scale(1.05); }
+  .anon-tip { font-size: 12px; color: #888; }
+
+  #exitBtn {
+    position: relative; z-index: 10;
+    padding: 12px 36px; font-size: 18px; font-family: inherit; font-weight: 700;
+    color: #fff; background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.5); border-radius: 10px;
+    cursor: pointer; transition: all 0.3s ease; display: none;
+  }
+  #exitBtn:hover { background: rgba(255, 255, 255, 0.3); border-color: #fff; }
+
+  /* ===== 音乐静音按钮 ===== */
+  #muteBtn {
+    position: fixed; top: 85px; right: 20px; z-index: 999;
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.5);
+    color: #fff; border-radius: 8px; padding: 8px 12px;
+    cursor: pointer; font-size: 15px; transition: all 0.2s; display: none;
+  }
+  #muteBtn:hover { background: rgba(255,255,255,0.3); }
+
+  /* ===== 战斗中上方大字提示 ===== */
+  #battleMessage {
+    position: fixed; top: 18%; left: 50%; transform: translateX(-50%) scale(0.8);
+    z-index: 50; font-size: clamp(32px, 5vw, 64px); font-weight: 900;
+    color: #ffdd00; letter-spacing: 4px;
+    text-shadow: 0 0 20px #ff6ec7, 0 0 40px #ff5050, 3px 3px 0 #000;
+    opacity: 0; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: none; white-space: nowrap;
+  }
+  #battleMessage.show { opacity: 1; transform: translateX(-50%) scale(1); }
+
+  /* ===== 背景层 ===== */
+  #bg { position: fixed; inset: 0; background: url('background.png') center/cover no-repeat; z-index: 0; }
+  #stars {
+    position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    background-image: radial-gradient(2px 2px at 20% 30%, #fff, transparent), radial-gradient(1px 1px at 60% 70%, #fff, transparent);
+    background-size: 300px 300px; animation: twinkle 4s infinite alternate;
+  }
+  @keyframes twinkle { from { opacity: .4; } to { opacity: .9; } }
+
+  /* ===== 顶部状态栏 ===== */
+  #hud {
+    position: fixed; top: 14px; left: 0; right: 0; z-index: 10;
+    display: flex; justify-content: space-between; align-items: flex-start; padding: 0 30px; font-size: 18px; pointer-events: none;
+  }
+  .hero-box, .monster-box {
+    display: flex; flex-direction: column; gap: 8px; background: rgba(10, 20, 45, .55);
+    border: 2px solid rgba(80,180,255,.6); border-radius: 14px; padding: 12px 20px;
+    backdrop-filter: blur(10px); min-width: 260px;
+  }
+  .monster-box { border-color: rgba(255,80,80,.6); text-align: right; }
+  .name-row { display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: 700; }
+  .hero-box .name-row { color: #7dd3fc; }
+  .monster-box .name-row { color: #ff9b9b; }
+  
+  .hp-bar { width: 260px; height: 20px; background: #111; border: 2px solid #50b4ff; border-radius: 10px; overflow: hidden; }
+  .monster-box .hp-bar { border-color: #ff5050; }
+  .hp-bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #00ffcc, #50b4ff); transition: width .5s; }
+  .hp-bar i.low { background: linear-gradient(90deg, #ff2222, #ff6600); }
+  
+  .boss-hp-container { display: flex; gap: 4px; width: 260px; height: 20px; }
+  .boss-hp-block { flex: 1; background: linear-gradient(90deg, #ff6ec7, #a78bfa); border-radius: 4px; transition: all 0.3s; }
+  .boss-hp-block.lost { background: #222; border-color: #444; }
+
+  /* ===== 战斗舞台 ===== */
+  #stage { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+  #ultraman { position: absolute; left: 3%; bottom: 8%; height: 33.33vh; width: auto; transition: transform 1s, opacity 1s; filter: drop-shadow(0 0 30px rgba(80,180,255,.9)); z-index: 3; }
+  #ultraman img { height: 100%; width: auto; display: block; }
+  #ultramanAttack { position: absolute; left: 3%; bottom: 8%; height: 33.33vh; width: auto; filter: drop-shadow(0 0 40px rgba(80,200,255,1)); z-index: 3; display: none; }
+  #ultramanAttack img { height: 100%; width: auto; display: block; }
+
+  @keyframes flyUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-130vh) scale(0.5); opacity: 0; } }
+  @keyframes dropDown { 0% { transform: translateY(-130vh) scale(0.5); opacity: 0; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+  .fly-to-sky { animation: flyUp 1s cubic-bezier(0.5, 0, 1, 0.5) forwards; }
+  .drop-from-sky { animation: dropDown 1s cubic-bezier(0, 0.5, 0.5, 1) forwards; }
+  
+  @keyframes dissolve { 0% { opacity: 1; filter: drop-shadow(0 0 20px #50b4ff) blur(0); transform: scale(1); } 100% { opacity: 0; filter: drop-shadow(0 0 40px #fff) blur(8px); transform: scale(1.4); } }
+  #ultraman.dissolve { animation: dissolve 1s forwards; }
+
+  @keyframes particleDisintegrate { 0% { filter: brightness(2) blur(0); opacity: 1; transform: scale(1); } 50% { filter: brightness(5) blur(8px); opacity: 0.8; transform: scale(1.1); } 100% { filter: brightness(15) blur(25px); opacity: 0; transform: scale(1.6); } }
+  .monster-particle { animation: particleDisintegrate 1s forwards; }
+
+  #monster { position: absolute; right: 3%; bottom: 8%; height: 33.33vh; width: auto; transition: transform .8s, opacity .8s; filter: drop-shadow(0 0 25px rgba(255,80,80,.8)); z-index: 2; }
+  #monster img { height: 100%; width: auto; display: block; }
+
+  #monsterCenter { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(1); height: 75vh; width: auto; filter: drop-shadow(0 0 40px rgba(255,80,80,.9)); z-index: 15; display: none; transition: transform 1s, top 1s, left 1s, height 1s, opacity 1s; }
+  #monsterCenter.show { display: block; }
+  #monsterCenter.toCorner { left: 97%; top: 92%; height: 33.33vh; transform: translate(-100%, -100%) scale(0.4); opacity: 0; }
+
+  #centerName { position: fixed; left: 50%; top: 4%; transform: translateX(-50%); z-index: 16; font-size: 42px; font-weight: 800; letter-spacing: 4px; background: linear-gradient(90deg, #ff6ec7, #ff5050, #ffdd00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: none; }
+  #centerName.show { display: block; }
+
+  #beam { position: absolute; left: 26%; bottom: 28vh; width: 0; height: 50px; background: linear-gradient(90deg, transparent, #a8e0ff, #fff, #50b4ff, transparent); box-shadow: 0 0 30px #50b4ff, 0 0 60px #50b4ff; opacity: 0; transform-origin: left center; transition: width 0.3s, opacity 0.2s; z-index: 5; border-radius: 50%; }
+  #beam.active { width: 55vw; opacity: 1; }
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0; z-index: 18; pointer-events: none; }
+  #flash.on { animation: flash .5s; }
+  @keyframes flash { 0%{opacity:0;} 30%{opacity:.9;} 100%{opacity:0;} }
+
+  /* ===== 题目面板 ===== */
+  #panel { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 10; width: min(560px, 92vw); background: rgba(10, 20, 45, .88); backdrop-filter: blur(12px); border: 1px solid rgba(80,180,255,.4); border-radius: 18px; padding: 22px; box-shadow: 0 0 40px rgba(80,180,255,.25); }
+  #qmeta { display: flex; justify-content: space-between; font-size: 13px; color: #8ab4ff; margin-bottom: 10px; }
+  #question { font-size: 17px; line-height: 1.6; margin-bottom: 16px; min-height: 52px; }
+  #options { display: grid; gap: 10px; }
+  #options button { padding: 12px 16px; text-align: left; font-size: 15px; font-family: inherit; color: #e2e8f0; background: rgba(40,60,100,.8); border: 1px solid #3a5a90; border-radius: 10px; cursor: pointer; transition: all .2s; }
+  #options button:hover:not(:disabled) { background: rgba(60,100,160,.9); border-color: #50b4ff; transform: translateX(4px); }
+  #options button:disabled { cursor: default; }
+  #options button.correct { background: #166534; border-color: #22c55e; }
+  #options button.wrong { background: #7f1d1d; border-color: #ef4444; }
+  #msg { text-align: center; margin-top: 12px; min-height: 22px; font-size: 14px; color: #7dd3fc; }
+
+  /* ===== 开始界面 ===== */
+  #overlay { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0, 5, 20, .95); text-align: center; padding: 30px; }
+  #overlay img { height: 40vh; width: auto; margin-bottom: 25px; filter: drop-shadow(0 0 30px rgba(80,180,255,.9)); }
+  #overlay p { color: #9bb4e0; font-size: 22px; max-width: 600px; line-height: 1.8; margin-bottom: 30px; text-shadow: 0 0 15px rgba(80,180,255,.5); }
+  #overlay button { padding: 18px 60px; font-size: 20px; font-family: inherit; font-weight: 700; color: #041024; background: linear-gradient(90deg, #50b4ff, #a78bfa); border: none; border-radius: 14px; cursor: pointer; transition: transform .2s, box-shadow .2s; box-shadow: 0 0 20px rgba(120,180,255,.5); margin-bottom: 15px; }
+  #overlay button:hover { transform: scale(1.06); box-shadow: 0 0 40px rgba(120,180,255,.9); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- 音频文件 -->
+<audio id="bgmStart" loop><source src="bgm_start.mp3" type="audio/mpeg"></audio>
+<audio id="bgmCorrect"><source src="bgm_correct.mp3" type="audio/mpeg"></audio>
+<audio id="bgmWrong"><source src="bgm_wrong.mp3" type="audio/mpeg"></audio>
+<audio id="bgmDeath" loop><source src="bgm_death.mp3" type="audio/mpeg"></audio>
+<button id="muteBtn" onclick="toggleMute()">🔊 音乐开</button>
+
+<!-- 失败全屏字幕 -->
+<div id="deathSubtitle">
+  <span>维克特利奥特曼被抢走了，呜呜呜</span>
+</div>
+
+<!-- 失败战败图片 -->
+<div id="defeatOverlay">
+  <img src="defeat.png" alt="战败">
+</div>
+
+<!-- 开场动画 -->
+<div id="introOverlay">
+  <img id="introImg1" src="intro1.png" class="active" alt="开场1">
+  <img id="introImg2" src="intro2.png" alt="开场2">
+  <img id="introImg3" src="intro3.png" alt="开场3">
+</div>
+
+<!-- 结局动画 (带评价界面) -->
+<div id="endingOverlay">
+  <img id="endingImg" src="ending.png" alt="结局">
+  <div id="thanksText">谢谢玩我的游戏</div>
+  
+  <!-- 匿名评价框 -->
+  <div id="reviewBox">
+    <h3>给本游戏打个分吧</h3>
+    <div class="stars" id="starContainer">
+      <span class="star" onclick="setRating(1)">★</span>
+      <span class="star" onclick="setRating(2)">★</span>
+      <span class="star" onclick="setRating(3)">★</span>
+      <span class="star" onclick="setRating(4)">★</span>
+      <span class="star" onclick="setRating(5)">★</span>
+    </div>
+    <textarea id="reviewText" placeholder="写下你的评价（匿名发布）..."></textarea>
+    <span class="anon-tip">* 评价将以匿名形式提交</span>
+    <button class="submit-review" onclick="submitReview()">提交评价</button>
+  </div>
+
+  <button id="exitBtn" onclick="exitGame()">退出游戏</button>
+</div>
+
+<div id="battleMessage"></div>
+<div id="bg"></div>
+<div id="stars"></div>
+<div id="flash"></div>
+
+<div id="hud" class="hidden">
+  <div class="hero-box">
+    <div class="name-row"><span>🩵 银河奥特曼</span><span id="heroHpTxt">100%</span></div>
+    <div class="hp-bar"><i id="hpFill"></i></div>
+  </div>
+  <div class="monster-box">
+    <div class="name-row"><span id="monsterName">怪兽</span><span id="bossHpTxt" class="hidden">5/5</span></div>
+    <div class="hp-bar" id="normalMonsterHp"><i id="monsterHpFill"></i></div>
+    <div class="boss-hp-container hidden" id="bossHpWrap">
+      <div class="boss-hp-block"></div>
+      <div class="boss-hp-block"></div>
+      <div class="boss-hp-block"></div>
+      <div class="boss-hp-block"></div>
+      <div class="boss-hp-block"></div>
+    </div>
+  </div>
+</div>
+
+<div id="stage">
+  <div id="beam"></div>
+  <div id="ultraman"><img src="ultraman.png" alt="银河奥特曼"></div>
+  <div id="ultramanAttack"><img src="ultraman_attack.png" alt="银河奥特曼攻击"></div>
+  <div id="monster"><img id="monsterImg" src="monster1.png" alt="怪兽"></div>
+</div>
+
+<img id="monsterCenter" src="monster1.png" alt="怪兽">
+<div id="centerName">怪兽名字</div>
+
+<div id="panel" class="hidden">
+  <div id="qmeta">
+    <span>第 <b id="qnum">1</b> / 20 题</span>
+    <span id="scoreTxt">得分：0</span>
+  </div>
+  <div id="question"></div>
+  <div id="options"></div>
+  <div id="msg"></div>
+</div>
+
+<!-- 开始界面 -->
+<div id="overlay" class="hidden">
+  <img src="ultraman.png" alt="银河奥特曼">
+  <p>来一起答题，成为银河奥特曼，拯救我们的白月光维克特利奥特曼</p>
+  <button onclick="startGame()">拯救维克特利奥特曼计划开始</button>
+</div>
+
+<script>
+const questions = [
+  { q:"电压的单位是什么？", options:["安培(A)","伏特(V)","欧姆(Ω)","瓦特(W)"], answer:1 },
+  { q:"欧姆定律的正确表达式是？", options:["U = I × R","P = U × I","I = U × R","R = U × I"], answer:0 },
+  { q:"防止人体触电的保护元件是？", options:["断路器","接触器","漏电保护器","继电器"], answer:2 },
+  { q:"三相功率的计算公式是？", options:["P = U × I","P = 3 × U × I","I = U × cosφ","P = √3 × U × I × cosφ"], answer:3 },
+  { q:"电气作业前必须做的第一步是？", options:["直接操作","断电验电","戴手套","检查工具"], answer:1 },
+  { q:"电流的单位是什么？", options:["伏特(V)","安培(A)","欧姆(Ω)","焦耳(J)"], answer:1 },
+  { q:"电阻的单位是什么？", options:["安培(A)","伏特(V)","欧姆(Ω)","瓦特(W)"], answer:2 },
+  { q:"功率的单位是什么？", options:["瓦特(W)","伏特(V)","安培(A)","欧姆(Ω)"], answer:0 },
+  { q:"我国民用交流电的频率是多少？", options:["50Hz","60Hz","100Hz","25Hz"], answer:0 },
+  { q:"我国民用单相电压是多少伏？", options:["110V","220V","380V","36V"], answer:1 },
+  { q:"三相工业用电的线电压是多少伏？", options:["220V","380V","660V","110V"], answer:1 },
+  { q:"导体电阻与下列哪项无关？", options:["材料","长度","截面积","电压"], answer:3 },
+  { q:"断路器的主要作用是？", options:["变压","过载和短路保护","整流","储能"], answer:1 },
+  { q:"接地的主要目的是？", options:["省电","防止漏电伤人","提高功率","降温"], answer:1 },
+  { q:"漏电保护器检测的是什么？", options:["电压","漏电流","功率","频率"], answer:1 },
+  { q:"接触器主要用于？", options:["频繁通断大电流电路","变压","整流","滤波"], answer:0 },
+  { q:"继电器的作用是？", options:["小电流控制大电流","变压","储能","发光"], answer:0 },
+  { q:"导线截面积越大，其载流量？", options:["越小","越大","不变","无关"], answer:1 },
+  { q:"电气火灾首先应？", options:["泼水","切断电源","逃跑","扇风"], answer:1 },
+  { q:"安全电压一般不超过多少伏？", options:["36V","110V","220V","380V"], answer:0 }
+];
+
+const monsterNames = [
+  "雷德王","哥莫拉","芝顿","巴尔坦星人","安东拉",
+  "巴顿","泰兰特","哥尔赞","加坦杰厄","贝蒙斯坦",
+  "鲁格赛特","海帕杰顿","黑暗迪迦","贝利亚","安培拉星人"
+];
+
+const monsterImages = [
+  "monster1.png","monster2.png","monster3.png","monster4.png","monster5.png",
+  "monster6.png","monster7.png","monster8.png","monster9.png","monster10.png",
+  "monster11.png","monster12.png","monster13.png","monster14.png","monster15.png"
+];
+
+let current = 0, hp = 100, score = 0, bossHp = 5, locked = false;
+let bgmTimer = null; 
+let currentRating = 0; 
+const $ = id => document.getElementById(id);
+
+/* ========== 评价功能逻辑 ========== */
+function setRating(n) {
+  currentRating = n;
+  const stars = document.querySelectorAll("#starContainer .star");
+  stars.forEach((star, index) => {
+    if (index < n) star.classList.add("active");
+    else star.classList.remove("active");
+  });
+}
+
+function submitReview() {
+  if (currentRating === 0) {
+    alert("请先点击星星打个分哦~");
+    return;
+  }
+  const text = $("reviewText").value;
+  $("reviewBox").innerHTML = `
+    <h3 style="color: #50b4ff; font-size: 24px; margin-top: 10px;">🌟 感谢你的匿名评价！</h3>
+    <p style="color: #888; font-size: 14px; margin-top: 10px;">你的评分：${currentRating} 星<br>评论：${text || "无"}</p>
+  `;
+}
+
+/* ========== 播放控制 ========== */
+function stopAllBgm() {
+  $("bgmStart").pause();
+  $("bgmCorrect").pause();
+  $("bgmWrong").pause();
+  $("bgmDeath").pause();
+  if (bgmTimer) {
+    clearTimeout(bgmTimer);
+    bgmTimer = null;
+  }
+}
+
+function playIntro() {
+  const startBgm = $("bgmStart");
+  startBgm.volume = 0.5;
+  startBgm.currentTime = 0;
+  
+  let playPromise = startBgm.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(error => {
+      const playOnInteraction = () => {
+        if ($("bgmStart").paused && $("bgmDeath").paused) {
+          $("bgmStart").play().catch(e => {});
+        }
+        document.body.removeEventListener('click', playOnInteraction);
+        document.body.removeEventListener('touchstart', playOnInteraction);
+      };
+      document.body.addEventListener('click', playOnInteraction);
+      document.body.addEventListener('touchstart', playOnInteraction);
+    });
+  }
+
+  setTimeout(() => {
+    $("introImg1").classList.remove("active");
+    $("introImg2").classList.add("active");
+  }, 5000);
+
+  setTimeout(() => {
+    $("introImg2").classList.remove("active");
+    $("introImg3").classList.add("active");
+  }, 10000);
+
+  setTimeout(() => {
+    $("introOverlay").style.opacity = "0";
+    setTimeout(() => {
+      $("introOverlay").style.display = "none";
+      $("overlay").classList.remove("hidden");
+    }, 1000);
+  }, 15000);
+}
+window.onload = playIntro;
+
+function startGame() {
+  const startBgm = $("bgmStart");
+  if (startBgm.paused) {
+    startBgm.play().catch(e => {});
+  }
+  $("muteBtn").classList.remove("hidden");
+  $("overlay").classList.add("hidden");
+  $("hud").classList.remove("hidden");
+  $("panel").classList.remove("hidden");
+  resetGame();
+  showQuestion();
+}
+
+/* ========== 静音控制 ========== */
+function toggleMute() {
+  const btn = $("muteBtn");
+  const bgms = [$("bgmStart"), $("bgmDeath"), $("bgmCorrect"), $("bgmWrong")];
+  
+  // 检查当前是否有声音在播放
+  let isPlaying = bgms.some(bgm => !bgm.paused);
+  
+  if (isPlaying) {
+    // 如果有人在播，全部暂停
+    bgms.forEach(bgm => bgm.pause());
+    btn.innerHTML = "🔇 音乐关";
+  } else {
+    // 如果全部暂停了，根据当前状态恢复对应的音乐
+    if (hp <= 0) {
+      $("bgmDeath").play().catch(e => {});
+    } else if ($("overlay").classList.contains("hidden")) {
+      // 游戏中恢复主背景
+      $("bgmStart").play().catch(e => {});
+    } else {
+      // 开始界面
+      $("bgmStart").play().catch(e => {});
+    }
+    btn.innerHTML = "🔊 音乐开";
+  }
+}
+
+function resetGame() {
+  current = 0; hp = 100; score = 0; bossHp = 5; locked = false;
+  updateHp(); updateBossHp();
+  $("scoreTxt").textContent = "得分：0";
+  $("ultraman").className = ""; $("ultraman").style.opacity = "1"; $("ultraman").style.display = "block";
+  $("ultramanAttack").className = ""; $("ultramanAttack").style.display = "none";
+  $("monster").className = ""; $("monster").style.opacity = "1";
+  $("beam").className = ""; $("beam").style.opacity = "0"; $("beam").style.width = "0";
+  $("monsterCenter").className = ""; $("monsterCenter").style.display = "none";
+  $("centerName").className = "";
+  $("monsterImg").src = monsterImages[0];
+  $("bossHpWrap").classList.add("hidden");
+  $("normalMonsterHp").classList.remove("hidden");
+  $("bossHpTxt").classList.add("hidden");
+  $("battleMessage").className = "";
+  $("defeatOverlay").classList.remove("show");
+  $("defeatOverlay").style.display = "none";
+}
+
+function updateHp() {
+  $("hpFill").style.width = hp + "%";
+  $("heroHpTxt").textContent = hp + "%";
+  if (hp <= 20) $("hpFill").classList.add("low");
+  else $("hpFill").classList.remove("low");
+}
+
+function updateBossHp() {
+  $("bossHpTxt").textContent = bossHp + "/5";
+  const blocks = document.querySelectorAll(".boss-hp-block");
+  blocks.forEach((block, index) => {
+    if (index >= bossHp) block.classList.add("lost");
+    else block.classList.remove("lost");
+  });
+}
+
+function showQuestion() {
+  locked = false;
+  const q = questions[current];
+  $("qnum").textContent = current + 1;
+  $("question").textContent = q.q;
+  $("msg").textContent = "";
+  $("battleMessage").className = ""; 
+
+  if (current < 15) {
+    $("monsterName").textContent = "👹 " + monsterNames[current];
+    $("normalMonsterHp").classList.remove("hidden");
+    $("bossHpWrap").classList.add("hidden");
+    $("bossHpTxt").classList.add("hidden");
+    $("monsterHpFill").style.width = "100%";
+    $("monsterImg").src = monsterImages[current];
+    $("monster").style.filter = "drop-shadow(0 0 25px rgba(255,80,80,.8))";
+  } else {
+    $("monsterName").textContent = "🌑 黑暗路基艾尔";
+    $("normalMonsterHp").classList.add("hidden");
+    $("bossHpWrap").classList.remove("hidden");
+    $("bossHpTxt").classList.remove("hidden");
+    $("monsterImg").src = "boss.png";
+    $("monster").style.filter = "drop-shadow(0 0 30px #ff6ec7)";
+  }
+
+  const box = $("options");
+  box.innerHTML = "";
+  q.options.forEach((text, i) => {
+    const btn = document.createElement("button");
+    btn.textContent = text;
+    btn.onclick = () => choose(i, btn);
+    box.appendChild(btn);
+  });
+}
+
+function choose(index, btn) {
+  if (locked) return;
+  locked = true;
+  const q = questions[current];
+  const buttons = document.querySelectorAll("#options button");
+  buttons.forEach(b => b.disabled = true);
+
+  if (index === q.answer) {
+    btn.classList.add("correct");
+    score++;
+    $("scoreTxt").textContent = "得分：" + score;
+
+    $("ultraman").style.display = "none";
+    $("ultramanAttack").style.display = "block";
+
+    // 200ms后：光线 + 闪光 + 音效叠加
+    setTimeout(() => {
+      $("beam").classList.add("active");
+      flash();
+
+      // 【修改点】：主音乐不暂停，直接叠加音效
+      const correctSfx = $("bgmCorrect");
+      correctSfx.currentTime = 0;
+      correctSfx.play().catch(e => {});
+      
+      bgmTimer = setTimeout(() => {
+        correctSfx.pause();
+      }, 2000);
+
+    }, 200);
+
+    const nextIdx = current + 1;
+    if (nextIdx < 15) {
+      $("monsterName").textContent = "👹 " + monsterNames[nextIdx];
+      $("monsterHpFill").style.width = "100%";
+      $("normalMonsterHp").classList.remove("hidden");
+      $("bossHpWrap").classList.add("hidden");
+      $("bossHpTxt").classList.add("hidden");
+    } else if (nextIdx >= 15 && nextIdx < 20) {
+      $("monsterName").textContent = "🌑 黑暗路基艾尔";
+      $("normalMonsterHp").classList.add("hidden");
+      $("bossHpWrap").classList.remove("hidden");
+      $("bossHpTxt").classList.remove("hidden");
+      if (current >= 15) { bossHp--; updateBossHp(); } 
+      else { bossHp = 5; updateBossHp(); }
+    } else if (nextIdx === 20) {
+      bossHp = 0; updateBossHp();
+    }
+
+    setTimeout(() => {
+      $("monster").classList.add("monster-particle");
+      const msgText = current < 15 ? "⚡ 击败了「" + monsterNames[current] + "」！" : "💥 击中黑暗路基艾尔！";
+      $("battleMessage").textContent = msgText;
+      $("battleMessage").classList.add("show");
+    }, 600);
+
+    setTimeout(() => {
+      $("beam").classList.remove("active");
+      $("ultramanAttack").classList.add("fly-to-sky");
+    }, 800);
+
+    setTimeout(() => {
+      $("ultramanAttack").className = "";
+      $("ultramanAttack").style.display = "none";
+      $("ultraman").style.display = "none";
+      $("monster").style.opacity = "0";
+
+      if (current < 19) {
+        const nextImg = nextIdx < 15 ? monsterImages[nextIdx] : "boss.png";
+        $("monsterCenter").src = nextImg;
+        $("monsterCenter").className = "show";
+        const nextName = nextIdx < 15 ? monsterNames[nextIdx] : "黑暗路基艾尔";
+        $("centerName").textContent = "👹 " + nextName;
+        $("centerName").className = "show";
+      }
+    }, 1000);
+
+    setTimeout(() => {
+      $("monsterCenter").classList.add("toCorner");
+      $("centerName").className = "";
+    }, 3000);
+
+    setTimeout(() => {
+      $("monsterCenter").className = "";
+      $("monsterCenter").style.display = "none";
+      $("monster").style.opacity = "1";
+      $("monster").className = "";
+      $("ultraman").style.display = "block";
+      $("ultraman").className = "drop-from-sky";
+    }, 3600);
+
+    setTimeout(() => {
+      $("ultraman").className = "";
+      $("battleMessage").className = ""; 
+      nextQuestion();
+    }, 4600);
+
+  } else {
+    btn.classList.add("wrong");
+    buttons[q.answer].classList.add("correct");
+    hp -= 20; if (hp < 0) hp = 0;
+    updateHp();
+    $("msg").textContent = "❌ 答错了！银河奥特曼损失 20% 血量（剩余 " + hp + "%）";
+
+    if (hp <= 0) {
+      stopAllBgm(); // 只有死的时候才彻底停止所有
+      $("bgmDeath").play().catch(e => {});
+
+      setTimeout(() => {
+        $("ultraman").classList.add("dissolve");
+        $("msg").textContent = ""; 
+        $("panel").classList.add("hidden");
+        $("hud").classList.add("hidden");
+        
+        $("defeatOverlay").style.display = "flex";
+        setTimeout(() => $("defeatOverlay").classList.add("show"), 50);
+      }, 600);
+      
+      setTimeout(() => {
+        $("defeatOverlay").classList.remove("show");
+        setTimeout(() => {
+          $("defeatOverlay").style.display = "none";
+          $("deathSubtitle").classList.add("show");
+        }, 1000);
+      }, 5600); 
+
+      setTimeout(() => {
+        gameOver(false);
+      }, 10600); 
+      return;
+    }
+
+    // 【修改点】：主音乐不暂停，直接叠加音效
+    const wrongSfx = $("bgmWrong");
+    wrongSfx.currentTime = 0;
+    wrongSfx.play().catch(e => {});
+
+    bgmTimer = setTimeout(() => {
+      wrongSfx.pause();
+    }, 2000);
+
+    setTimeout(() => { $("ultraman").classList.add("dissolve"); }, 200);
+    setTimeout(() => {
+      $("ultraman").classList.remove("dissolve");
+      $("ultraman").style.opacity = "1";
+    }, 1200);
+
+    setTimeout(() => {
+      locked = false;
+      buttons.forEach(b => {
+        b.disabled = false;
+        b.classList.remove("wrong", "correct");
+      });
+      $("msg").textContent = "❌ 答错了！请重新选择正确答案！";
+    }, 1600);
+  }
+}
+
+function nextQuestion() {
+  current++;
+  if (current >= 20) gameOver(true);
+  else showQuestion();
+}
+
+function flash() {
+  const f = $("flash");
+  f.classList.remove("on");
+  void f.offsetWidth;
+  f.classList.add("on");
+}
+
+/* ========== 游戏结束 ========== */
+function gameOver(win) {
+  $("panel").classList.add("hidden");
+  $("hud").classList.add("hidden");
+  $("battleMessage").className = "";
+  $("deathSubtitle").classList.remove("show"); 
+  $("defeatOverlay").classList.remove("show");
+  $("defeatOverlay").style.display = "none";
+
+  if (win && hp > 0) {
+    $("endingOverlay").style.display = "flex";
+    $("endingImg").style.opacity = "1";
+    $("thanksText").style.opacity = "0";
+    $("exitBtn").style.display = "none";
+    $("reviewBox").style.display = "none"; 
+
+    setTimeout(() => {
+      $("endingImg").style.opacity = "0";
+      $("thanksText").style.opacity = "1";
+      $("reviewBox").style.display = "flex"; 
+      $("exitBtn").style.display = "block"; 
+    }, 5000);
+  } else {
+    $("overlay").classList.remove("hidden");
+    $("overlay").innerHTML = `
+      <h1 style="font-size:36px; margin-bottom:20px; background:linear-gradient(90deg,#50b4ff,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">💫 银河奥特曼倒下了……</h1>
+      <p style="margin-bottom: 20px;">血量归零，奥特曼化为粒子消散在宇宙中。<br>击败怪兽：${score} 只<br>最终得分：${score} / 20</p>
+      
+      <div id="reviewBox" style="display: flex;">
+        <h3>给本游戏打个分吧</h3>
+        <div class="stars" id="starContainer">
+          <span class="star" onclick="setRating(1)">★</span>
+          <span class="star" onclick="setRating(2)">★</span>
+          <span class="star" onclick="setRating(3)">★</span>
+          <span class="star" onclick="setRating(4)">★</span>
+          <span class="star" onclick="setRating(5)">★</span>
+        </div>
+        <textarea id="reviewText" placeholder="写下你的评价（匿名发布）..."></textarea>
+        <span class="anon-tip">* 评价将以匿名形式提交</span>
+        <button class="submit-review" onclick="submitReview()">提交评价</button>
+      </div>
+
+      <button onclick="location.reload()" style="margin-top: 15px;">重新挑战</button>
+    `;
+    currentRating = 0;
+  }
+}
+
+function exitGame() {
+  window.close();
+  setTimeout(() => {
+    document.body.innerHTML = `
+      <div style="display:flex; height:100vh; align-items:center; justify-content:center; background:#000; color:#fff; font-family:'Microsoft YaHei',sans-serif; font-size:24px; flex-direction:column; gap:20px;">
+        <span>游戏已退出</span>
+        <span style="font-size:16px; color:#888;">请手动关闭此浏览器标签页</span>
+      </div>
+    `;
+  }, 300);
+}
+</script>
+
+</body>
+</html>
